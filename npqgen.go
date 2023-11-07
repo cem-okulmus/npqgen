@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"math/rand"
+	"strings"
 	"time"
 )
 
@@ -15,8 +16,23 @@ import (
 
 */
 
+type WaypointMode int
+
+const (
+	NodeType WaypointMode = iota
+	UnLabel
+	RelType
+	RelInv
+	// UnRel
+)
+
 type waypoint interface {
 	AmWayPoint()
+	GetMode(prev waypoint) WaypointMode
+	GetLabel() string
+	SetLabelFrom(variable string)
+	SetLabelTo(variable string)
+	StringRep() string
 }
 
 type Relationship struct {
@@ -24,11 +40,29 @@ type Relationship struct {
 	from       *Node
 	to         *Node
 	properties map[string]string
+	varFrom    string
+	varTo      string
 }
 
-func (r Relationship) AmWayPoint() {}
+func (r *Relationship) StringRep() string {
+	return fmt.Sprint(r.label, "(", r.varFrom, ",", r.varTo, ")")
+}
 
-func (r Relationship) String() string {
+func (r *Relationship) AmWayPoint() {}
+
+func (r *Relationship) GetLabel() string { return r.label }
+
+func (r *Relationship) SetLabelFrom(variable string) { r.varFrom = variable }
+func (r *Relationship) SetLabelTo(variable string)   { r.varTo = variable }
+
+func (r *Relationship) GetMode(prev waypoint) WaypointMode {
+	if prev.GetLabel() == r.from.label {
+		return RelType
+	}
+	return RelInv
+}
+
+func (r *Relationship) String() string {
 	return fmt.Sprintln(r.label)
 }
 
@@ -36,12 +70,33 @@ type Node struct {
 	label      string
 	unlabelled bool // used to indicate nodes that the path jumps over, but which do not add classes
 	properties map[string]string
+	varFrom    string
+	varTo      string
 }
 
-func (r Node) AmWayPoint() {}
+func (r *Node) AmWayPoint() {}
 
-func (r Node) String() string {
-  return fmt.Sprintln(r.label)
+func (r *Node) StringRep() string {
+	if r.unlabelled {
+		return ""
+	}
+	return fmt.Sprint(r.label, "(", r.varFrom, ")")
+}
+
+func (r *Node) GetLabel() string { return r.label }
+
+func (r *Node) SetLabelFrom(variable string) { r.varFrom = variable }
+func (r *Node) SetLabelTo(variable string)   { r.varTo = variable }
+
+func (r *Node) GetMode(prev waypoint) WaypointMode {
+	if r.unlabelled {
+		return UnLabel
+	}
+	return NodeType
+}
+
+func (r *Node) String() string {
+	return fmt.Sprintln(r.label)
 }
 
 type Graph struct {
@@ -77,6 +132,68 @@ func (g *Graph) AddRel(label string, from, to string) error {
 	}
 	g.Edges = append(g.Edges, newRel)
 	return nil
+}
+
+type Path struct {
+	stops []waypoint
+}
+
+func convertToAlphabetic(n int) string {
+	result := ""
+	for n > 0 {
+		mod := (n - 1) % 26
+		result = string('a'+mod) + result
+		n = (n - mod) / 26
+	}
+	return result
+}
+
+func (p Path) String() string {
+	var elements []string
+
+	if len(p.stops) == 0 {
+		return ""
+	}
+	lenSoFar := 0
+	prev := p.stops[0]
+	var prevPrev waypoint = (*Node)(nil)
+	prev.SetLabelFrom(convertToAlphabetic(lenSoFar))
+
+	for _, next := range p.stops {
+
+		prevVar := convertToAlphabetic(lenSoFar)
+
+		switch next.GetMode(prev) {
+		case NodeType, UnLabel: // need new label
+
+			lenSoFar++
+			nextVar := convertToAlphabetic(lenSoFar)
+			next.SetLabelFrom(nextVar)
+
+			if prevPrev != nil && prev.GetMode(prevPrev) == RelInv {
+				prev.SetLabelFrom(nextVar)
+			} else {
+				prev.SetLabelTo(nextVar)
+			}
+
+			elements = append(elements, prev.StringRep())
+
+			next.SetLabelTo(nextVar)
+		case RelType: // don't need label
+			next.SetLabelFrom(prevVar)
+		case RelInv: // don't need new label
+			next.SetLabelTo(prevVar)
+			// case UnRel: // two new label
+			// 	next.SetLabelFrom(nextVar)
+			// 	lenSoFar++
+			// 	nextestVar := convertToAlphabetic(lenSoFar)
+			// 	next.SetLabelTo(nextestVar)
+		}
+		prevPrev = prev
+		prev = next
+	}
+
+	return strings.Join(elements, ", ")
 }
 
 // TODO:
@@ -124,7 +241,7 @@ func (g Graph) GetPath(length int, startingNode string) ([]waypoint, error) {
 
 	var tmpPath []waypoint
 
-	tmpPath = append(tmpPath, startNode)
+	tmpPath = append(tmpPath, &startNode)
 
 	if length <= 1 {
 		return tmpPath, nil
@@ -145,7 +262,7 @@ func (g Graph) GetPath(length int, startingNode string) ([]waypoint, error) {
 
 	nextRelToTake := neighbours[toPick]
 
-	tmpPath = append(tmpPath, nextRelToTake)
+	tmpPath = append(tmpPath, &nextRelToTake)
 	var remPath []waypoint
 	// direction
 	if nextRelToTake.to.label == startingNode {
@@ -178,7 +295,7 @@ func main() {
 
 	graph := GetManualRep()
 
-	path, _ := graph.GetPath(3, "pedestrian")
+	path, _ := graph.GetPath(6, "pedestrian")
 
-	fmt.Println("Produced path", path)
+	fmt.Println("Produced path", Path{stops: path})
 }
