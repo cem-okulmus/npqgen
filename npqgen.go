@@ -2,8 +2,10 @@ package main
 
 import (
 	"errors"
+	"flag"
 	"fmt"
 	"math/rand"
+	"os"
 	"strings"
 	"time"
 )
@@ -192,6 +194,9 @@ func (p Path) String() string {
 		prevPrev = prev
 		prev = next
 	}
+	if prevPrev != nil && prev.GetMode(prevPrev) == NodeType {
+		elements = append(elements, prev.StringRep())
+	}
 
 	return strings.Join(elements, ", ")
 }
@@ -207,28 +212,55 @@ func GetManualRep() Graph {
 
 	pedestrian := Node{label: "pedestrian"}
 	pedestrian_mov := Node{label: "pedestrian_moving"}
-	pedestrian_stat := Node{label: "pedestrian_stationay"}
+	pedestrian_stat := Node{label: "pedestrian_standing"}
+
+	vehicle := Node{label: "vehicle"}
+	vehicle_moving := Node{label: "vehicle_moving"}
+	vehicle_stopped := Node{label: "vehicle_stopped"}
+	vehicle_parked := Node{label: "vehicle_parked"}
+
+	bus := Node{label: "bus"}
+
+	bicycle := Node{label: "bicycle"}
+
+	cycle_with_rider := Node{label: "cycle_with_rider"}
+	cycle_without_rider := Node{label: "cycle_without_rider"}
+
 	sample := Node{label: "sample"}
-	unlabelA := Node{label: "unlabelA", unlabelled: true}
-	unlabelB := Node{label: "unlabelB", unlabelled: true}
-	unlabelC := Node{label: "unlabelC", unlabelled: true}
+	instance := Node{label: "instance", unlabelled: true}
+	sample_annotation := Node{label: "sample_annotation", unlabelled: true}
 
 	out.AddNode(pedestrian)
 	out.AddNode(pedestrian_mov)
 	out.AddNode(pedestrian_stat)
+	out.AddNode(vehicle)
+	out.AddNode(vehicle_moving)
+	out.AddNode(vehicle_stopped)
+	out.AddNode(vehicle_parked)
+	out.AddNode(bus)
+	out.AddNode(bicycle)
+	out.AddNode(cycle_with_rider)
+	out.AddNode(cycle_without_rider)
 	out.AddNode(sample)
-	out.AddNode(unlabelA)
-	out.AddNode(unlabelB)
-	out.AddNode(unlabelC)
+	out.AddNode(instance)
+	out.AddNode(sample_annotation)
 
-	out.AddRel("of", "unlabelA", "pedestrian")
-	out.AddRel("first_annotation", "pedestrian", "unlabelB")
-	out.AddRel("first_annotation", "pedestrian", "unlabelB")
-	out.AddRel("of", "unlabelB", "sample")
-	out.AddRel("next", "sample", "sample")
-	out.AddRel("has", "unlabelA", "pedestrian_moving")
-	out.AddRel("next", "pedestrian_moving", "pedestrian_stationay")
-	out.AddRel("has", "unlabelC", "pedestrian_stationay")
+	out.AddRel("OF", "instance", "pedestrian")
+	out.AddRel("OF", "instance", "vehicle")
+	out.AddRel("OF", "instance", "bus")
+	out.AddRel("OF", "instance", "bicycle")
+	out.AddRel("FIRST_ANNOTATION", "pedestrian", "sample_annotation")
+	out.AddRel("LAST_ANNOTATION", "pedestrian", "sample_annotation")
+	out.AddRel("OF", "sample_annotation", "sample")
+	out.AddRel("NEXT", "sample", "sample")
+	out.AddRel("NEXT", "instance", "instance")
+	out.AddRel("HAS", "instance", "pedestrian_moving")
+	out.AddRel("HAS", "instance", "pedestrian_standing")
+	out.AddRel("HAS", "instance", "vehicle_moving")
+	out.AddRel("HAS", "instance", "vehicle_stopped")
+	out.AddRel("HAS", "instance", "vehicle_parked")
+	out.AddRel("HAS", "instance", "cycle_with_rider")
+	out.AddRel("HAS", "instance", "cycle_without_rider")
 
 	return out
 }
@@ -275,27 +307,30 @@ func (g Graph) GetPath(length int, startingNode string) ([]waypoint, error) {
 }
 
 func main() {
+	graph := GetManualRep()
+
 	// ==============================================
 	// Command-Line Argument Parsing
 
-	// flagSet := flag.NewFlagSet("npqGen", flag.ExitOnError)
+	flagSet := flag.NewFlagSet("npqgen", flag.ExitOnError)
 
-	// // input flags
+	// input flags
 	// graph := flagSet.String("graph", "", "The graph over which new queries are generated.")
+	length := flagSet.Int("length", 0, "The length of the path that defines the query.")
+	startWith := flagSet.String("startWith", "pedestrian", "The starting node. Must exist.")
 
-	// flagSet.Parse(os.Args[1:])
+	flagSet.Parse(os.Args[1:])
 
-	// if *graph == "" {
-	// 	flagSet.Usage()
-	// 	os.Exit(-1)
-	// }
+	if _, ok := graph.Nodes[*startWith]; !ok || *length == 0 {
+		flagSet.Usage()
+		os.Exit(-1)
+	}
 
-	// // END Command-Line Argument Parsing
-	// // ==============================================
+	// END Command-Line Argument Parsing
+	// ==============================================
 
-	graph := GetManualRep()
+	path, _ := graph.GetPath(*length, *startWith)
 
-	path, _ := graph.GetPath(6, "pedestrian")
-
+	fmt.Println("Produced path", path)
 	fmt.Println("Produced path", Path{stops: path})
 }
