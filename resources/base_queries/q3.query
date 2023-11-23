@@ -1,0 +1,1 @@
+q(z,zp):-pedestrian(x),LAST_ANNOTATION(x,y),OF(y,z),sample(z),NEXT(z,t),NEXT*(t,zp),OF(yp,zp),FIRST_ANNOTATION(xp,yp),pedestrian(xp)

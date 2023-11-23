@@ -63,10 +63,10 @@ func (r *Relationship) SetLabelFrom(variable string) { r.varFrom = variable }
 func (r *Relationship) SetLabelTo(variable string)   { r.varTo = variable }
 
 func (r *Relationship) GetMode(prev waypoint) WaypointMode {
-	if prev.GetLabel() == r.from.label {
-		return RelType
+	if prev != nil && prev.GetLabel() == r.to.label {
+		return RelInv
 	}
-	return RelInv
+	return RelType
 }
 
 func (r *Relationship) String() string {
@@ -270,20 +270,58 @@ func (s *Subgraph) AllDifferentQuery() string {
 	return strings.Join(slices.DeleteFunc(sb, func(s string) bool { return len(s) == 0 }), ", ")
 }
 
+func (s *Subgraph) GetNthElement(index int) (waypoint, error) {
+	if index > len(s.order) {
+		return nil, errors.New("out of bounds error Subgraph")
+	}
+
+	var el waypoint
+
+	for i, k := range s.order {
+		if k == index {
+			el = i
+		}
+	}
+
+	return el, nil
+}
+
 // MaximallyJoined produces an NP query where we have as many joins as are feasible with the schema
 func (s *Subgraph) MaximallyJoined() string {
 	var sb []string
 
-	for wp, count := range s.order {
+	innerCount := 1
+
+	nodeMapping := make(map[string]int)
+
+	for wp := range s.order {
 		switch wpType := wp.(type) {
 		case *Node:
-			wpType.SetLabelFrom(convertToAlphabetic(count + 1))
+			num, ok := nodeMapping[wpType.label]
+			if !ok {
+				nodeMapping[wpType.label] = innerCount
+				innerCount++
+				num = nodeMapping[wpType.label]
+			}
+			wp.SetLabelFrom(convertToAlphabetic(num))
 		case *Relationship:
-			wpType.SetLabelFrom(convertToAlphabetic(count + 1))
-			count++
-			wpType.SetLabelTo(convertToAlphabetic(count + 1))
+			numFrom, ok1 := nodeMapping[wpType.from.label]
+			numTo, ok2 := nodeMapping[wpType.to.label]
+			if !ok1 {
+				nodeMapping[wpType.from.label] = innerCount
+				innerCount++
+				numFrom = nodeMapping[wpType.from.label]
+			}
+			if !ok2 {
+				nodeMapping[wpType.to.label] = innerCount
+				innerCount++
+				numTo = nodeMapping[wpType.to.label]
+			}
+			wpType.SetLabelFrom(convertToAlphabetic(numFrom))
+			wpType.SetLabelTo(convertToAlphabetic(numTo))
 		}
 		sb = append(sb, wp.StringRep())
+
 	}
 
 	return strings.Join(slices.DeleteFunc(sb, func(s string) bool { return len(s) == 0 }), ", ")
@@ -313,12 +351,15 @@ func (p *Path) String() string {
 	if len(p.stops) == 0 {
 		return ""
 	}
-	lenSoFar := 0
+	lenSoFar := 1
 	prev := p.stops[0]
 	var prevPrev waypoint = (*Node)(nil)
 	prev.SetLabelFrom(convertToAlphabetic(lenSoFar))
 
-	for _, next := range p.stops {
+	for _, next := range p.stops[1:] {
+		// fmt.Println("Checking now ", next)
+		// fmt.Println("Prev ", prev)
+		// fmt.Println("Prevprev ", prevPrev)
 
 		prevVar := convertToAlphabetic(lenSoFar)
 
@@ -329,14 +370,11 @@ func (p *Path) String() string {
 			nextVar := convertToAlphabetic(lenSoFar)
 			next.SetLabelFrom(nextVar)
 
-			if prevPrev != nil && prev.GetMode(prevPrev) == RelInv {
+			if prev.GetMode(prevPrev) == RelInv {
 				prev.SetLabelFrom(nextVar)
 			} else {
 				prev.SetLabelTo(nextVar)
 			}
-
-			elements = append(elements, prev.StringRep())
-
 			next.SetLabelTo(nextVar)
 		case RelType: // don't need label
 			next.SetLabelFrom(prevVar)
@@ -348,78 +386,18 @@ func (p *Path) String() string {
 			// 	nextestVar := convertToAlphabetic(lenSoFar)
 			// 	next.SetLabelTo(nextestVar)
 		}
+		// fmt.Println("Attaching prev", prev)
+		elements = append(elements, prev.StringRep())
 		prevPrev = prev
 		prev = next
 	}
-	if prevPrev != nil && prev.GetMode(prevPrev) == NodeType {
+	if prev.GetMode(prevPrev) == NodeType {
+		fmt.Println("Attaching prev", prev.StringRep())
 		elements = append(elements, prev.StringRep())
 	}
 
-	return strings.Join(elements, ", ")
-}
-
-// TODO:
-// - Create a manual representation for now
-// - Simple algorithm that picks a node and searches blindly for a number of steps
-// - then produces NPGQ based on that trace
-
-func GetManualRep() Graph {
-	var out Graph
-	out.Nodes = make(map[string]*Node)
-
-	pedestrian := Node{label: "pedestrian"}
-	pedestrian_mov := Node{label: "pedestrian_moving"}
-	pedestrian_stat := Node{label: "pedestrian_standing"}
-
-	vehicle := Node{label: "vehicle"}
-	vehicle_moving := Node{label: "vehicle_moving"}
-	vehicle_stopped := Node{label: "vehicle_stopped"}
-	vehicle_parked := Node{label: "vehicle_parked"}
-
-	bus := Node{label: "bus"}
-
-	bicycle := Node{label: "bicycle"}
-
-	cycle_with_rider := Node{label: "cycle_with_rider"}
-	cycle_without_rider := Node{label: "cycle_without_rider"}
-
-	sample := Node{label: "sample"}
-	instance := Node{label: "instance", unlabelled: true}
-	sample_annotation := Node{label: "sample_annotation", unlabelled: true}
-
-	out.AddNode(pedestrian)
-	out.AddNode(pedestrian_mov)
-	out.AddNode(pedestrian_stat)
-	out.AddNode(vehicle)
-	out.AddNode(vehicle_moving)
-	out.AddNode(vehicle_stopped)
-	out.AddNode(vehicle_parked)
-	out.AddNode(bus)
-	out.AddNode(bicycle)
-	out.AddNode(cycle_with_rider)
-	out.AddNode(cycle_without_rider)
-	out.AddNode(sample)
-	out.AddNode(instance)
-	out.AddNode(sample_annotation)
-
-	out.AddRel("OF", "instance", "pedestrian")
-	out.AddRel("OF", "instance", "vehicle")
-	out.AddRel("OF", "instance", "bus")
-	out.AddRel("OF", "instance", "bicycle")
-	out.AddRel("FIRST_ANNOTATION", "pedestrian", "sample_annotation")
-	out.AddRel("LAST_ANNOTATION", "pedestrian", "sample_annotation")
-	out.AddRel("OF", "sample_annotation", "sample")
-	out.AddRel("NEXT", "sample", "sample")
-	out.AddRel("NEXT", "instance", "instance")
-	out.AddRel("HAS", "instance", "pedestrian_moving")
-	out.AddRel("HAS", "instance", "pedestrian_standing")
-	out.AddRel("HAS", "instance", "vehicle_moving")
-	out.AddRel("HAS", "instance", "vehicle_stopped")
-	out.AddRel("HAS", "instance", "vehicle_parked")
-	out.AddRel("HAS", "instance", "cycle_with_rider")
-	out.AddRel("HAS", "instance", "cycle_without_rider")
-
-	return out
+	// return strings.Join(elements, ", ")
+	return strings.Join(slices.DeleteFunc(elements, func(s string) bool { return len(s) == 0 }), ", ")
 }
 
 func (g Graph) GetSubGraph() Subgraph {

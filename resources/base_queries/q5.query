@@ -1,0 +1,1 @@
+q(x):-pedestrian(x),OF(y,x),HAS(y,z),pedestrian_standing(z),NEXT(y,t),NEXT*(t,yp),HAS(yp,zp),pedestrian_moving(zp)
