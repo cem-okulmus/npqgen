@@ -392,7 +392,7 @@ func (p *Path) String() string {
 		prev = next
 	}
 	if prev.GetMode(prevPrev) == NodeType {
-		fmt.Println("Attaching prev", prev.StringRep())
+		// fmt.Println("Attaching prev", prev.StringRep())
 		elements = append(elements, prev.StringRep())
 	}
 

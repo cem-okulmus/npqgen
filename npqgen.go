@@ -172,20 +172,20 @@ func main() {
 			subgraph.RandomGrow()
 		}
 
-		fmt.Println("internal:")
-		for i, k := range subgraph.order {
-			fmt.Println(i, " ", convertToAlphabetic(k+1))
-		}
+		// fmt.Println("internal:")
+		// for i, k := range subgraph.order {
+		// 	fmt.Println(i, " ", convertToAlphabetic(k+1))
+		// }
 
 		fmt.Println("Produced subgraph query", subgraph.MaximallyJoined())
 	} else {
 		path, err := graph.GetPath(length, startWith)
 		check(err)
 
-		fmt.Println("internal:")
-		for i := range path.stops {
-			fmt.Println(path.stops[i])
-		}
+		// fmt.Println("internal:")
+		// for i := range path.stops {
+		// 	fmt.Println(path.stops[i])
+		// }
 		fmt.Println("Produced path query", path.String())
 	}
 }
